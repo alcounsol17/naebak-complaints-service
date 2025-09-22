@@ -1,0 +1,887 @@
+{% extends 'shared/base.html' %}
+{% load static %}
+
+{% block title %}إدارة الشكاوى - لوحة الإدارة{% endblock %}
+
+{% block extra_css %}
+<style>
+    .admin-dashboard {
+        background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .assign-form {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .bulk-actions {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .representative-card {
+        border: 1px solid #dee2e6;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 0.5rem;
+        cursor: pointer;
+        transition: all 0.3s ease;
+    }
+    
+    .representative-card:hover {
+        background: #f8f9fa;
+        border-color: var(--primary-green);
+    }
+    
+    .representative-card.selected {
+        background: rgba(46, 125, 50, 0.1);
+        border-color: var(--primary-green);
+    }
+    
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }
+    
+    .export-options {
+        background: #e7f3ff;
+        border: 1px solid #b3d9ff;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-top: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-cogs text-primary-green me-2"></i>
+            لوحة إدارة الشكاوى
+        </h1>
+    </div>
+</div>
+
+<!-- إحصائيات شاملة -->
+<div class="stats-grid">
+    <div class="stat-card total">
+        <span class="stat-number">{{ stats.total_complaints }}</span>
+        <span class="stat-label">إجمالي الشكاوى</span>
+    </div>
+    <div class="stat-card pending">
+        <span class="stat-number">{{ stats.pending_complaints }}</span>
+        <span class="stat-label">قيد المراجعة</span>
+    </div>
+    <div class="stat-card" style="background: #17A2B8;">
+        <span class="stat-number">{{ stats.assigned_complaints }}</span>
+        <span class="stat-label">مُسندة</span>
+    </div>
+    <div class="stat-card resolved">
+        <span class="stat-number">{{ stats.resolved_complaints }}</span>
+        <span class="stat-label">محلولة</span>
+    </div>
+    <div class="stat-card rejected">
+        <span class="stat-number">{{ stats.rejected_complaints }}</span>
+        <span class="stat-label">مرفوضة</span>
+    </div>
+    <div class="stat-card" style="background: #FD7E14;">
+        <span class="stat-number">{{ stats.overdue_complaints }}</span>
+        <span class="stat-label">متأخرة</span>
+    </div>
+</div>
+
+<!-- أدوات الإدارة -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-tools me-2"></i>
+                    أدوات الإدارة
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <select class="form-select" id="status-filter">
+                            <option value="">جميع الحالات</option>
+                            <option value="pending">قيد المراجعة</option>
+                            <option value="assigned">مُسندة</option>
+                            <option value="accepted">مقبولة</option>
+                            <option value="rejected">مرفوضة</option>
+                            <option value="on_hold">معلقة</option>
+                            <option value="resolved">محلولة</option>
+                            <option value="overdue">متأخرة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="priority-filter">
+                            <option value="">جميع الأولويات</option>
+                            <option value="urgent">عاجلة</option>
+                            <option value="high">عالية</option>
+                            <option value="medium">متوسطة</option>
+                            <option value="low">منخفضة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <select class="form-select" id="category-filter">
+                            <option value="">جميع التصنيفات</option>
+                            {% for category in categories %}
+                                <option value="{{ category.id }}">{{ category.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" class="form-control" id="search-input" placeholder="البحث في الشكاوى...">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" id="refresh-complaints">
+                            <i class="fas fa-sync-alt me-1"></i>
+                            تحديث
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- العمليات المجمعة -->
+                <div class="bulk-actions mt-3" style="display: none;">
+                    <div class="d-flex align-items-center gap-3">
+                        <span><strong>العمليات المجمعة:</strong></span>
+                        <button class="btn btn-sm btn-warning" id="bulk-assign">
+                            <i class="fas fa-user-plus me-1"></i>
+                            إسناد للنائب
+                        </button>
+                        <button class="btn btn-sm btn-info" id="bulk-export">
+                            <i class="fas fa-download me-1"></i>
+                            تصدير المحددة
+                        </button>
+                        <button class="btn btn-sm btn-secondary" id="clear-selection">
+                            <i class="fas fa-times me-1"></i>
+                            إلغاء التحديد
+                        </button>
+                        <span class="text-muted">(<span id="selected-count">0</span> محددة)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- قائمة الشكاوى -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    جميع الشكاوى
+                </h5>
+                <div class="d-flex gap-2">
+                    <button class="btn btn-sm btn-success" id="export-all">
+                        <i class="fas fa-file-export me-1"></i>
+                        تصدير الكل
+                    </button>
+                    <button class="btn btn-sm btn-info" id="show-stats">
+                        <i class="fas fa-chart-bar me-1"></i>
+                        إحصائيات تفصيلية
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="complaints-list">
+                    <!-- سيتم تحميل الشكاوى هنا عبر JavaScript -->
+                    <div class="text-center py-4">
+                        <div class="loading-spinner"></div>
+                        <p class="mt-2">جاري تحميل الشكاوى...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal لعرض تفاصيل الشكوى -->
+<div class="modal fade" id="complaint-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل الشكوى</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="complaint-details">
+                <!-- سيتم تحميل التفاصيل هنا -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal لإسناد الشكوى -->
+<div class="modal fade" id="assign-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">إسناد الشكوى للنائب</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="assign-form">
+                    <input type="hidden" id="assign-complaint-ids">
+                    
+                    <div class="mb-3">
+                        <label class="form-label">البحث عن النائب</label>
+                        <input type="text" class="form-control" id="representative-search" placeholder="ابحث بالاسم أو المحافظة...">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">اختر النائب</label>
+                        <div id="representatives-list" style="max-height: 300px; overflow-y: auto;">
+                            <!-- سيتم تحميل قائمة النواب هنا -->
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="assign-notes" class="form-label">ملاحظات (اختياري)</label>
+                        <textarea class="form-control" id="assign-notes" rows="3" placeholder="أي ملاحظات أو تعليمات للنائب..."></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="confirm-assign" disabled>
+                    <i class="fas fa-user-plus me-1"></i>
+                    إسناد الشكوى
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal للرد الإداري -->
+<div class="modal fade" id="admin-response-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">الرد الإداري</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="admin-response-form">
+                    <input type="hidden" id="admin-response-complaint-id">
+                    
+                    <div class="mb-3">
+                        <label for="admin-response-text" class="form-label">الرد الإداري *</label>
+                        <textarea class="form-control" id="admin-response-text" rows="5" required maxlength="2000" placeholder="اكتب الرد الإداري على الشكوى..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="close-complaint">
+                            <label class="form-check-label" for="close-complaint">
+                                إغلاق الشكوى نهائياً
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="submit-admin-response">
+                    <i class="fas fa-paper-plane me-1"></i>
+                    إرسال الرد
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal للتصدير -->
+<div class="modal fade" id="export-modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تصدير الشكاوى</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="export-form">
+                    <div class="mb-3">
+                        <label class="form-label">نوع التصدير</label>
+                        <select class="form-select" id="export-format">
+                            <option value="zip">ملف مضغوط (ZIP) - مع المرفقات</option>
+                            <option value="excel">ملف إكسل (XLSX)</option>
+                            <option value="pdf">ملف PDF</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">الفترة الزمنية</label>
+                        <div class="row">
+                            <div class="col-md-6">
+                                <input type="date" class="form-control" id="export-date-from" placeholder="من تاريخ">
+                            </div>
+                            <div class="col-md-6">
+                                <input type="date" class="form-control" id="export-date-to" placeholder="إلى تاريخ">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="include-attachments" checked>
+                            <label class="form-check-label" for="include-attachments">
+                                تضمين المرفقات
+                            </label>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="start-export">
+                    <i class="fas fa-download me-1"></i>
+                    بدء التصدير
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let selectedComplaints = new Set();
+    let selectedRepresentative = null;
+    
+    // تحميل الشكاوى
+    function loadComplaints() {
+        const status = $('#status-filter').val();
+        const priority = $('#priority-filter').val();
+        const category = $('#category-filter').val();
+        const search = $('#search-input').val();
+        
+        let url = '/api/v1/complaints/';
+        const params = [];
+        
+        if (status) params.push(`status=${status}`);
+        if (priority) params.push(`priority=${priority}`);
+        if (category) params.push(`category=${category}`);
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
+        
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(response) {
+                displayComplaints(response.results || response);
+            },
+            error: function() {
+                $('#complaints-list').html(`
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-3x text-muted mb-3"></i>
+                        <p>حدث خطأ في تحميل الشكاوى</p>
+                        <button class="btn btn-primary" onclick="loadComplaints()">إعادة المحاولة</button>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function displayComplaints(complaints) {
+        if (complaints.length === 0) {
+            $('#complaints-list').html(`
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p>لا توجد شكاوى</p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = `
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th width="40">
+                                <input type="checkbox" id="select-all" class="form-check-input">
+                            </th>
+                            <th>العنوان</th>
+                            <th>المواطن</th>
+                            <th>الحالة</th>
+                            <th>الأولوية</th>
+                            <th>النائب المُسند</th>
+                            <th>تاريخ الإنشاء</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+        `;
+        
+        complaints.forEach(complaint => {
+            const isOverdue = complaint.is_overdue;
+            const rowClass = isOverdue ? 'table-danger' : '';
+            
+            html += `
+                <tr class="${rowClass}">
+                    <td>
+                        <input type="checkbox" class="form-check-input complaint-checkbox" value="${complaint.id}">
+                    </td>
+                    <td>
+                        <div>
+                            <strong>${complaint.title}</strong>
+                            ${complaint.priority === 'urgent' ? '<i class="fas fa-exclamation-circle text-danger ms-1"></i>' : ''}
+                            ${isOverdue ? '<i class="fas fa-clock text-danger ms-1" title="متأخرة"></i>' : ''}
+                        </div>
+                        <small class="text-muted">رقم المرجع: ${complaint.reference_number}</small>
+                    </td>
+                    <td>
+                        <div>${complaint.citizen_name}</div>
+                        <small class="text-muted">${complaint.citizen_email}</small>
+                    </td>
+                    <td>
+                        <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                    </td>
+                    <td>
+                        <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                    </td>
+                    <td>
+                        ${complaint.assigned_representative_name || '<span class="text-muted">غير مُسند</span>'}
+                    </td>
+                    <td>
+                        ${new Date(complaint.created_at).toLocaleDateString('ar-EG')}
+                        ${complaint.attachments_count > 0 ? `<br><small class="text-muted"><i class="fas fa-paperclip"></i> ${complaint.attachments_count}</small>` : ''}
+                    </td>
+                    <td>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-primary" onclick="viewComplaint(${complaint.id})" title="عرض">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            ${complaint.status === 'pending' ? `
+                                <button class="btn btn-outline-warning" onclick="assignComplaint(${complaint.id})" title="إسناد">
+                                    <i class="fas fa-user-plus"></i>
+                                </button>
+                            ` : ''}
+                            <button class="btn btn-outline-info" onclick="adminRespond(${complaint.id})" title="رد إداري">
+                                <i class="fas fa-reply"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += `
+                    </tbody>
+                </table>
+            </div>
+        `;
+        
+        $('#complaints-list').html(html);
+        
+        // تحديث حالة التحديد
+        updateSelectionUI();
+    }
+    
+    // إدارة التحديد المجمع
+    $(document).on('change', '#select-all', function() {
+        const isChecked = $(this).is(':checked');
+        $('.complaint-checkbox').prop('checked', isChecked);
+        updateSelectedComplaints();
+    });
+    
+    $(document).on('change', '.complaint-checkbox', function() {
+        updateSelectedComplaints();
+    });
+    
+    function updateSelectedComplaints() {
+        selectedComplaints.clear();
+        $('.complaint-checkbox:checked').each(function() {
+            selectedComplaints.add(parseInt($(this).val()));
+        });
+        updateSelectionUI();
+    }
+    
+    function updateSelectionUI() {
+        const count = selectedComplaints.size;
+        $('#selected-count').text(count);
+        
+        if (count > 0) {
+            $('.bulk-actions').show();
+        } else {
+            $('.bulk-actions').hide();
+        }
+        
+        // تحديث حالة "تحديد الكل"
+        const totalCheckboxes = $('.complaint-checkbox').length;
+        const checkedCheckboxes = $('.complaint-checkbox:checked').length;
+        
+        if (checkedCheckboxes === 0) {
+            $('#select-all').prop('indeterminate', false).prop('checked', false);
+        } else if (checkedCheckboxes === totalCheckboxes) {
+            $('#select-all').prop('indeterminate', false).prop('checked', true);
+        } else {
+            $('#select-all').prop('indeterminate', true);
+        }
+    }
+    
+    // عرض تفاصيل الشكوى
+    window.viewComplaint = function(id) {
+        $.ajax({
+            url: `/api/v1/complaints/${id}/`,
+            type: 'GET',
+            success: function(complaint) {
+                let html = `
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6>العنوان</h6>
+                                    <p>${complaint.title}</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6>الحالة</h6>
+                                    <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6>الأولوية</h6>
+                                    <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <h6>بيانات المواطن</h6>
+                                <p><strong>الاسم:</strong> ${complaint.citizen_name}</p>
+                                <p><strong>البريد الإلكتروني:</strong> ${complaint.citizen_email}</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <h6>محتوى الشكوى</h6>
+                                <p>${complaint.content}</p>
+                            </div>
+                            
+                            ${complaint.youtube_link ? `
+                                <div class="mb-3">
+                                    <h6>رابط يوتيوب</h6>
+                                    <iframe width="100%" height="300" src="https://www.youtube.com/embed/${extractYouTubeId(complaint.youtube_link)}" frameborder="0" allowfullscreen></iframe>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.attachments && complaint.attachments.length > 0 ? `
+                                <div class="mb-3">
+                                    <h6>المرفقات</h6>
+                                    <div class="row">
+                                        ${complaint.attachments.map(att => `
+                                            <div class="col-md-4 mb-2">
+                                                <a href="${att.file}" target="_blank" class="btn btn-outline-primary btn-sm w-100">
+                                                    <i class="fas fa-download me-1"></i>
+                                                    ${att.original_name}
+                                                </a>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.assigned_representative_name ? `
+                                <div class="mb-3">
+                                    <h6>النائب المُسند</h6>
+                                    <p>${complaint.assigned_representative_name}</p>
+                                    <small class="text-muted">تاريخ الإسناد: ${new Date(complaint.assigned_at).toLocaleString('ar-EG')}</small>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.admin_response ? `
+                                <div class="mb-3">
+                                    <h6>الرد الإداري</h6>
+                                    <div class="alert alert-info">${complaint.admin_response}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.representative_response ? `
+                                <div class="mb-3">
+                                    <h6>رد النائب</h6>
+                                    <div class="alert alert-success">${complaint.representative_response}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.resolution ? `
+                                <div class="mb-3">
+                                    <h6>الحل المقدم</h6>
+                                    <div class="alert alert-primary">${complaint.resolution}</div>
+                                    ${complaint.thank_you_message ? `
+                                        <div class="alert alert-warning">
+                                            <strong>رسالة الشكر:</strong> ${complaint.thank_you_message}
+                                        </div>
+                                    ` : ''}
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6>تاريخ الشكوى</h6>
+                            <div class="complaint-timeline">
+                                ${complaint.history && complaint.history.length > 0 ? 
+                                    complaint.history.map(item => `
+                                        <div class="timeline-item">
+                                            <small class="text-muted">${new Date(item.performed_at).toLocaleString('ar-EG')}</small>
+                                            <p class="mb-1"><strong>${item.action_display}</strong></p>
+                                            <p class="small text-muted">${item.description}</p>
+                                        </div>
+                                    `).join('') : 
+                                    '<p class="text-muted">لا يوجد تاريخ متاح</p>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#complaint-details').html(html);
+                $('#complaint-modal').modal('show');
+            }
+        });
+    };
+    
+    // إسناد الشكوى
+    window.assignComplaint = function(id) {
+        selectedComplaints.clear();
+        selectedComplaints.add(id);
+        showAssignModal();
+    };
+    
+    $('#bulk-assign').on('click', function() {
+        if (selectedComplaints.size === 0) {
+            alert('يرجى تحديد شكوى واحدة على الأقل');
+            return;
+        }
+        showAssignModal();
+    });
+    
+    function showAssignModal() {
+        $('#assign-complaint-ids').val(Array.from(selectedComplaints).join(','));
+        selectedRepresentative = null;
+        $('#confirm-assign').prop('disabled', true);
+        loadRepresentatives();
+        $('#assign-modal').modal('show');
+    }
+    
+    function loadRepresentatives() {
+        // TODO: تحميل قائمة النواب من خدمة المحتوى
+        // في الوقت الحالي نستخدم بيانات وهمية
+        const representatives = [
+            { id: 1, name: 'أحمد محمد علي', governorate: 'القاهرة', party: 'حزب المستقبل' },
+            { id: 2, name: 'فاطمة أحمد حسن', governorate: 'الجيزة', party: 'حزب الوطن' },
+            { id: 3, name: 'محمد عبد الله', governorate: 'الإسكندرية', party: 'حزب النور' }
+        ];
+        
+        displayRepresentatives(representatives);
+    }
+    
+    function displayRepresentatives(representatives) {
+        let html = '';
+        representatives.forEach(rep => {
+            html += `
+                <div class="representative-card" data-id="${rep.id}" data-name="${rep.name}">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <strong>${rep.name}</strong>
+                            <br>
+                            <small class="text-muted">${rep.governorate} - ${rep.party}</small>
+                        </div>
+                        <i class="fas fa-check text-success" style="display: none;"></i>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $('#representatives-list').html(html);
+    }
+    
+    $(document).on('click', '.representative-card', function() {
+        $('.representative-card').removeClass('selected').find('.fa-check').hide();
+        $(this).addClass('selected').find('.fa-check').show();
+        
+        selectedRepresentative = {
+            id: $(this).data('id'),
+            name: $(this).data('name')
+        };
+        
+        $('#confirm-assign').prop('disabled', false);
+    });
+    
+    $('#confirm-assign').on('click', function() {
+        if (!selectedRepresentative) {
+            alert('يرجى اختيار نائب');
+            return;
+        }
+        
+        const complaintIds = Array.from(selectedComplaints);
+        const notes = $('#assign-notes').val();
+        
+        // إسناد كل شكوى على حدة
+        let completed = 0;
+        const total = complaintIds.length;
+        
+        complaintIds.forEach(id => {
+            $.ajax({
+                url: `/api/v1/complaints/${id}/assign/`,
+                type: 'POST',
+                data: {
+                    representative_id: selectedRepresentative.id,
+                    representative_name: selectedRepresentative.name,
+                    notes: notes
+                },
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function() {
+                    completed++;
+                    if (completed === total) {
+                        alert(`تم إسناد ${total} شكوى بنجاح!`);
+                        $('#assign-modal').modal('hide');
+                        selectedComplaints.clear();
+                        loadComplaints();
+                    }
+                },
+                error: function(xhr) {
+                    alert('حدث خطأ في إسناد الشكوى رقم ' + id);
+                }
+            });
+        });
+    });
+    
+    // الرد الإداري
+    window.adminRespond = function(id) {
+        $('#admin-response-complaint-id').val(id);
+        $('#admin-response-form')[0].reset();
+        $('#admin-response-modal').modal('show');
+    };
+    
+    $('#submit-admin-response').on('click', function() {
+        const complaintId = $('#admin-response-complaint-id').val();
+        const responseText = $('#admin-response-text').val().trim();
+        const closeComplaint = $('#close-complaint').is(':checked');
+        
+        if (!responseText) {
+            alert('يرجى كتابة الرد الإداري');
+            return;
+        }
+        
+        $.ajax({
+            url: `/api/v1/complaints/${complaintId}/respond/`,
+            type: 'POST',
+            data: {
+                response_type: 'admin',
+                response_text: responseText
+            },
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function() {
+                if (closeComplaint) {
+                    // إغلاق الشكوى
+                    $.ajax({
+                        url: `/api/v1/complaints/${complaintId}/`,
+                        type: 'PATCH',
+                        data: { status: 'closed' },
+                        headers: {
+                            'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                        }
+                    });
+                }
+                
+                alert('تم إرسال الرد الإداري بنجاح!');
+                $('#admin-response-modal').modal('hide');
+                loadComplaints();
+            },
+            error: function(xhr) {
+                alert('حدث خطأ في إرسال الرد');
+            }
+        });
+    });
+    
+    // التصدير
+    $('#export-all, #bulk-export').on('click', function() {
+        $('#export-modal').modal('show');
+    });
+    
+    $('#start-export').on('click', function() {
+        const format = $('#export-format').val();
+        const dateFrom = $('#export-date-from').val();
+        const dateTo = $('#export-date-to').val();
+        const includeAttachments = $('#include-attachments').is(':checked');
+        
+        const data = {
+            format: format,
+            include_attachments: includeAttachments
+        };
+        
+        if (dateFrom) data.date_from = dateFrom;
+        if (dateTo) data.date_to = dateTo;
+        
+        $.ajax({
+            url: '/api/v1/complaints/export/',
+            type: 'POST',
+            data: data,
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                alert('تم بدء عملية التصدير. ستتلقى إشعاراً عند اكتمالها.');
+                $('#export-modal').modal('hide');
+            },
+            error: function() {
+                alert('حدث خطأ في بدء عملية التصدير');
+            }
+        });
+    });
+    
+    // إلغاء التحديد
+    $('#clear-selection').on('click', function() {
+        $('.complaint-checkbox').prop('checked', false);
+        $('#select-all').prop('checked', false);
+        updateSelectedComplaints();
+    });
+    
+    // تصفية الشكاوى
+    $('#status-filter, #priority-filter, #category-filter').on('change', loadComplaints);
+    $('#search-input').on('input', debounce(loadComplaints, 500));
+    $('#refresh-complaints').on('click', loadComplaints);
+    
+    // تحميل الشكاوى عند تحميل الصفحة
+    loadComplaints();
+    
+    // وظائف مساعدة
+    function extractYouTubeId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+});
+</script>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% load static %}
+
+<header class="main-header">
+    <nav class="navbar navbar-expand-lg navbar-light bg-white">
+        <div class="container">
+            <!-- Logo -->
+            <a class="navbar-brand" href="/">
+                <img src="{% static 'images/logo-naebak-green.png' %}" alt="نائبك.كوم" class="logo">
+            </a>
+            
+            <!-- Mobile Menu Toggle -->
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            
+            <!-- Navigation Menu -->
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">الرئيسية</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/representatives/">المرشحين</a>
+                    </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+                            الخدمات
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li><a class="dropdown-item" href="/complaints/">الشكاوى</a></li>
+                            <li><a class="dropdown-item" href="/messages/">الرسائل</a></li>
+                            <li><a class="dropdown-item" href="/ratings/">التقييمات</a></li>
+                        </ul>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/about/">من نحن</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/contact/">اتصل بنا</a>
+                    </li>
+                </ul>
+                
+                <!-- Right Side Items -->
+                <div class="navbar-nav ms-auto d-flex align-items-center">
+                    <!-- Notifications Bell -->
+                    <div class="nav-item dropdown me-3">
+                        <a class="nav-link position-relative" href="#" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-bell fs-5"></i>
+                            <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger notification-badge">
+                                3
+                            </span>
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end notifications-dropdown">
+                            <li class="dropdown-header">الإشعارات</li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item" href="#">تم الرد على شكواك</a></li>
+                            <li><a class="dropdown-item" href="#">شكوى جديدة مُسندة إليك</a></li>
+                            <li><a class="dropdown-item" href="#">تم تقييمك بـ 5 نجوم</a></li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li><a class="dropdown-item text-center" href="/notifications/">عرض جميع الإشعارات</a></li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Visitor Counter -->
+                    <div class="nav-item me-3">
+                        <span class="visitor-counter">
+                            <i class="fas fa-users me-1"></i>
+                            <span id="visitor-count">1,234,567</span>
+                        </span>
+                    </div>
+                    
+                    <!-- User Authentication -->
+                    {% if user.is_authenticated %}
+                        <div class="nav-item dropdown">
+                            <a class="nav-link dropdown-toggle user-menu" href="#" role="button" data-bs-toggle="dropdown">
+                                <i class="fas fa-user-circle me-1"></i>
+                                {{ user.username }}
+                            </a>
+                            <ul class="dropdown-menu dropdown-menu-end">
+                                <li><a class="dropdown-item" href="/profile/">الملف الشخصي</a></li>
+                                <li><a class="dropdown-item" href="/dashboard/">لوحة التحكم</a></li>
+                                {% if user.user_type == 'citizen' %}
+                                    <li><a class="dropdown-item" href="/citizen/complaints/">شكاواي</a></li>
+                                    <li><a class="dropdown-item" href="/citizen/messages/">رسائلي</a></li>
+                                {% elif user.user_type == 'representative' %}
+                                    <li><a class="dropdown-item" href="/representative/complaints/">الشكاوى المُسندة</a></li>
+                                    <li><a class="dropdown-item" href="/representative/messages/">الرسائل</a></li>
+                                {% elif user.is_staff %}
+                                    <li><a class="dropdown-item" href="/admin/complaints/">إدارة الشكاوى</a></li>
+                                    <li><a class="dropdown-item" href="/admin/dashboard/">لوحة الإدارة</a></li>
+                                {% endif %}
+                                <li><hr class="dropdown-divider"></li>
+                                <li><a class="dropdown-item" href="/logout/">تسجيل الخروج</a></li>
+                            </ul>
+                        </div>
+                    {% else %}
+                        <div class="nav-item">
+                            <a class="btn btn-primary login-btn" href="/login/">
+                                <i class="fas fa-sign-in-alt me-1"></i>
+                                تسجيل الدخول
+                            </a>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </nav>
+</header>

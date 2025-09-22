@@ -1,0 +1,573 @@
+{% extends 'shared/base.html' %}
+{% load static %}
+
+{% block title %}شكاواي - نائبك.كوم{% endblock %}
+
+{% block extra_css %}
+<style>
+    .complaint-form {
+        background: #f8f9fa;
+        border-radius: 10px;
+        padding: 2rem;
+        margin-bottom: 2rem;
+    }
+    
+    .attachment-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        margin-top: 1rem;
+    }
+    
+    .attachment-item {
+        position: relative;
+        background: white;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        padding: 1rem;
+        width: 150px;
+        text-align: center;
+    }
+    
+    .attachment-remove {
+        position: absolute;
+        top: -8px;
+        right: -8px;
+        background: #dc3545;
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 24px;
+        height: 24px;
+        font-size: 12px;
+        cursor: pointer;
+    }
+    
+    .youtube-preview {
+        margin-top: 1rem;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-exclamation-triangle text-primary-orange me-2"></i>
+            إدارة الشكاوى
+        </h1>
+    </div>
+</div>
+
+<!-- إحصائيات سريعة -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="stat-card total">
+            <span class="stat-number">{{ stats.total_complaints }}</span>
+            <span class="stat-label">إجمالي الشكاوى</span>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card pending">
+            <span class="stat-number">{{ stats.pending_complaints }}</span>
+            <span class="stat-label">قيد المراجعة</span>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card resolved">
+            <span class="stat-number">{{ stats.resolved_complaints }}</span>
+            <span class="stat-label">تم الحل</span>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="stat-card rejected">
+            <span class="stat-number">{{ stats.rejected_complaints }}</span>
+            <span class="stat-label">مرفوضة</span>
+        </div>
+    </div>
+</div>
+
+<!-- نموذج إرسال شكوى جديدة -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus me-2"></i>
+                    إرسال شكوى جديدة
+                </h5>
+            </div>
+            <div class="card-body">
+                <form id="complaint-form" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="title" class="form-label">عنوان الشكوى *</label>
+                                <input type="text" class="form-control" id="title" name="title" required maxlength="200">
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="category" class="form-label">التصنيف</label>
+                                <select class="form-control" id="category" name="category">
+                                    <option value="">اختر التصنيف</option>
+                                    {% for category in categories %}
+                                        <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
+                            <div class="mb-3">
+                                <label for="priority" class="form-label">الأولوية</label>
+                                <select class="form-control" id="priority" name="priority">
+                                    <option value="low">منخفضة</option>
+                                    <option value="medium" selected>متوسطة</option>
+                                    <option value="high">عالية</option>
+                                    <option value="urgent">عاجلة</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="content" class="form-label">محتوى الشكوى *</label>
+                        <textarea class="form-control" id="content" name="content" rows="6" required maxlength="1500" placeholder="اكتب تفاصيل شكواك هنا... (الحد الأقصى 1500 حرف)"></textarea>
+                        <div class="form-text">
+                            <span id="char-count">0</span> / 1500 حرف
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="youtube_link" class="form-label">رابط يوتيوب (اختياري)</label>
+                        <input type="url" class="form-control" id="youtube_link" name="youtube_link" placeholder="https://www.youtube.com/watch?v=...">
+                        <div id="youtube-preview" class="youtube-preview" style="display: none;"></div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="attachments" class="form-label">المرفقات (حتى 10 ملفات)</label>
+                        <div class="file-upload-area" id="file-upload-area">
+                            <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                            <p class="mb-2">اسحب الملفات هنا أو انقر للاختيار</p>
+                            <p class="text-muted small">الأنواع المدعومة: صور (JPG, PNG, GIF), PDF, Word (DOC, DOCX)</p>
+                            <input type="file" id="attachments" name="attachments" multiple accept=".jpg,.jpeg,.png,.gif,.pdf,.doc,.docx" style="display: none;">
+                        </div>
+                        <div id="attachment-preview" class="attachment-preview"></div>
+                    </div>
+                    
+                    <div class="text-end">
+                        <button type="button" class="btn btn-secondary me-2" id="save-draft">
+                            <i class="fas fa-save me-1"></i>
+                            حفظ كمسودة
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane me-1"></i>
+                            إرسال الشكوى
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- قائمة الشكاوى -->
+<div class="row">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="fas fa-list me-2"></i>
+                    شكاواي
+                </h5>
+                <div class="d-flex gap-2">
+                    <select class="form-select form-select-sm" id="status-filter">
+                        <option value="">جميع الحالات</option>
+                        <option value="pending">قيد المراجعة</option>
+                        <option value="assigned">مُسندة</option>
+                        <option value="accepted">مقبولة</option>
+                        <option value="rejected">مرفوضة</option>
+                        <option value="resolved">محلولة</option>
+                    </select>
+                    <button class="btn btn-sm btn-outline-primary" id="refresh-complaints">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <div id="complaints-list">
+                    <!-- سيتم تحميل الشكاوى هنا عبر JavaScript -->
+                    <div class="text-center py-4">
+                        <div class="loading-spinner"></div>
+                        <p class="mt-2">جاري تحميل الشكاوى...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal لعرض تفاصيل الشكوى -->
+<div class="modal fade" id="complaint-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل الشكوى</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="complaint-details">
+                <!-- سيتم تحميل التفاصيل هنا -->
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    // تحديث عداد الأحرف
+    $('#content').on('input', function() {
+        const count = $(this).val().length;
+        $('#char-count').text(count);
+        
+        if (count > 1400) {
+            $('#char-count').addClass('text-danger');
+        } else {
+            $('#char-count').removeClass('text-danger');
+        }
+    });
+    
+    // معاينة رابط يوتيوب
+    $('#youtube_link').on('input', function() {
+        const url = $(this).val();
+        const videoId = extractYouTubeId(url);
+        
+        if (videoId) {
+            const embedUrl = `https://www.youtube.com/embed/${videoId}`;
+            $('#youtube-preview').html(`
+                <iframe width="100%" height="200" src="${embedUrl}" frameborder="0" allowfullscreen></iframe>
+            `).show();
+        } else {
+            $('#youtube-preview').hide();
+        }
+    });
+    
+    // رفع الملفات
+    const fileUploadArea = $('#file-upload-area');
+    const fileInput = $('#attachments');
+    let selectedFiles = [];
+    
+    fileUploadArea.on('click', function() {
+        fileInput.click();
+    });
+    
+    fileUploadArea.on('dragover', function(e) {
+        e.preventDefault();
+        $(this).addClass('dragover');
+    });
+    
+    fileUploadArea.on('dragleave', function(e) {
+        e.preventDefault();
+        $(this).removeClass('dragover');
+    });
+    
+    fileUploadArea.on('drop', function(e) {
+        e.preventDefault();
+        $(this).removeClass('dragover');
+        
+        const files = e.originalEvent.dataTransfer.files;
+        handleFiles(files);
+    });
+    
+    fileInput.on('change', function() {
+        handleFiles(this.files);
+    });
+    
+    function handleFiles(files) {
+        for (let i = 0; i < files.length && selectedFiles.length < 10; i++) {
+            const file = files[i];
+            if (validateFile(file)) {
+                selectedFiles.push(file);
+                addFilePreview(file);
+            }
+        }
+    }
+    
+    function validateFile(file) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'application/pdf', 
+                             'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+        const maxSize = 10 * 1024 * 1024; // 10MB
+        
+        if (!allowedTypes.includes(file.type)) {
+            alert('نوع الملف غير مدعوم: ' + file.name);
+            return false;
+        }
+        
+        if (file.size > maxSize) {
+            alert('حجم الملف كبير جداً: ' + file.name);
+            return false;
+        }
+        
+        return true;
+    }
+    
+    function addFilePreview(file) {
+        const preview = $(`
+            <div class="attachment-item" data-file-name="${file.name}">
+                <button type="button" class="attachment-remove" onclick="removeFile('${file.name}')">×</button>
+                <i class="fas fa-file fa-2x mb-2"></i>
+                <p class="small mb-0">${file.name}</p>
+                <small class="text-muted">${formatFileSize(file.size)}</small>
+            </div>
+        `);
+        
+        $('#attachment-preview').append(preview);
+    }
+    
+    window.removeFile = function(fileName) {
+        selectedFiles = selectedFiles.filter(f => f.name !== fileName);
+        $(`.attachment-item[data-file-name="${fileName}"]`).remove();
+    };
+    
+    // إرسال النموذج
+    $('#complaint-form').on('submit', function(e) {
+        e.preventDefault();
+        
+        const formData = new FormData();
+        formData.append('title', $('#title').val());
+        formData.append('content', $('#content').val());
+        formData.append('category', $('#category').val());
+        formData.append('priority', $('#priority').val());
+        formData.append('youtube_link', $('#youtube_link').val());
+        
+        selectedFiles.forEach(file => {
+            formData.append('attachments', file);
+        });
+        
+        $.ajax({
+            url: '/api/v1/complaints/',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function(response) {
+                alert('تم إرسال الشكوى بنجاح!');
+                $('#complaint-form')[0].reset();
+                selectedFiles = [];
+                $('#attachment-preview').empty();
+                $('#youtube-preview').hide();
+                loadComplaints();
+            },
+            error: function(xhr) {
+                const errors = xhr.responseJSON;
+                let errorMessage = 'حدث خطأ في إرسال الشكوى:\n';
+                
+                for (const field in errors) {
+                    errorMessage += `${field}: ${errors[field].join(', ')}\n`;
+                }
+                
+                alert(errorMessage);
+            }
+        });
+    });
+    
+    // تحميل الشكاوى
+    function loadComplaints() {
+        const status = $('#status-filter').val();
+        let url = '/api/v1/complaints/';
+        
+        if (status) {
+            url += `?status=${status}`;
+        }
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(response) {
+                displayComplaints(response.results || response);
+            },
+            error: function() {
+                $('#complaints-list').html(`
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-3x text-muted mb-3"></i>
+                        <p>حدث خطأ في تحميل الشكاوى</p>
+                        <button class="btn btn-primary" onclick="loadComplaints()">إعادة المحاولة</button>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function displayComplaints(complaints) {
+        if (complaints.length === 0) {
+            $('#complaints-list').html(`
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p>لا توجد شكاوى</p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        complaints.forEach(complaint => {
+            html += `
+                <div class="complaint-card card mb-3 priority-${complaint.priority}">
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="card-title">${complaint.title}</h6>
+                                <p class="card-text text-truncate">${complaint.content}</p>
+                                <div class="complaint-meta">
+                                    <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                                    <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                                    <small class="text-muted ms-2">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        ${new Date(complaint.created_at).toLocaleDateString('ar-EG')}
+                                    </small>
+                                    ${complaint.attachments_count > 0 ? `
+                                        <small class="text-muted ms-2">
+                                            <i class="fas fa-paperclip me-1"></i>
+                                            ${complaint.attachments_count} مرفق
+                                        </small>
+                                    ` : ''}
+                                </div>
+                            </div>
+                            <div class="col-md-4 text-end">
+                                <div class="complaint-actions">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewComplaint(${complaint.id})">
+                                        <i class="fas fa-eye me-1"></i>
+                                        عرض
+                                    </button>
+                                    ${complaint.status === 'pending' ? `
+                                        <button class="btn btn-sm btn-outline-warning" onclick="editComplaint(${complaint.id})">
+                                            <i class="fas fa-edit me-1"></i>
+                                            تعديل
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                <div class="mt-2">
+                                    <small class="text-muted">رقم المرجع: ${complaint.reference_number}</small>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $('#complaints-list').html(html);
+    }
+    
+    // عرض تفاصيل الشكوى
+    window.viewComplaint = function(id) {
+        $.ajax({
+            url: `/api/v1/complaints/${id}/`,
+            type: 'GET',
+            success: function(complaint) {
+                let html = `
+                    <div class="row">
+                        <div class="col-md-6">
+                            <h6>العنوان</h6>
+                            <p>${complaint.title}</p>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>الحالة</h6>
+                            <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                        </div>
+                        <div class="col-md-3">
+                            <h6>الأولوية</h6>
+                            <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <h6>المحتوى</h6>
+                    <p>${complaint.content}</p>
+                    
+                    ${complaint.youtube_link ? `
+                        <h6>رابط يوتيوب</h6>
+                        <div class="mb-3">
+                            <iframe width="100%" height="300" src="https://www.youtube.com/embed/${extractYouTubeId(complaint.youtube_link)}" frameborder="0" allowfullscreen></iframe>
+                        </div>
+                    ` : ''}
+                    
+                    ${complaint.attachments && complaint.attachments.length > 0 ? `
+                        <h6>المرفقات</h6>
+                        <div class="row">
+                            ${complaint.attachments.map(att => `
+                                <div class="col-md-3 mb-2">
+                                    <a href="${att.file}" target="_blank" class="btn btn-outline-primary btn-sm w-100">
+                                        <i class="fas fa-download me-1"></i>
+                                        ${att.original_name}
+                                    </a>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                    
+                    ${complaint.assigned_representative_name ? `
+                        <hr>
+                        <h6>النائب المُسند</h6>
+                        <p>${complaint.assigned_representative_name}</p>
+                    ` : ''}
+                    
+                    ${complaint.admin_response ? `
+                        <hr>
+                        <h6>رد الإدارة</h6>
+                        <p>${complaint.admin_response}</p>
+                    ` : ''}
+                    
+                    ${complaint.representative_response ? `
+                        <hr>
+                        <h6>رد النائب</h6>
+                        <p>${complaint.representative_response}</p>
+                    ` : ''}
+                    
+                    ${complaint.resolution ? `
+                        <hr>
+                        <h6>الحل</h6>
+                        <p>${complaint.resolution}</p>
+                    ` : ''}
+                `;
+                
+                $('#complaint-details').html(html);
+                $('#complaint-modal').modal('show');
+            }
+        });
+    };
+    
+    // تصفية الشكاوى
+    $('#status-filter').on('change', loadComplaints);
+    $('#refresh-complaints').on('click', loadComplaints);
+    
+    // تحميل الشكاوى عند تحميل الصفحة
+    loadComplaints();
+    
+    // وظائف مساعدة
+    function extractYouTubeId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+    
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+});
+</script>
+{% endblock %}

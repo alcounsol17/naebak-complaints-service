@@ -1,0 +1,49 @@
+# متطلبات خدمة الشكاوى - منصة نائبك.كوم
+
+# Django Framework
+Django==4.2.7
+djangorestframework==3.14.0
+
+# Database
+psycopg2-binary==2.9.7
+dj-database-url==2.1.0
+
+# Authentication & Security
+djangorestframework-simplejwt==5.3.0
+django-cors-headers==4.3.1
+
+# Filtering & Pagination
+django-filter==23.3
+
+# Environment Variables
+python-decouple==3.8
+
+# File Handling & Storage
+Pillow==10.0.1
+google-cloud-storage==2.10.0
+
+# Caching & Performance
+redis==5.0.1
+django-redis==5.4.0
+
+# Background Tasks
+celery==5.3.4
+
+# Static Files
+whitenoise==6.6.0
+
+# File Processing
+python-magic==0.4.27
+
+# Utilities
+python-slugify==8.0.1
+uuid==1.30
+
+# Production Server
+gunicorn==21.2.0
+
+# Development & Testing
+pytest==7.4.3
+pytest-django==4.7.0
+pytest-cov==4.1.0
+factory-boy==3.3.0

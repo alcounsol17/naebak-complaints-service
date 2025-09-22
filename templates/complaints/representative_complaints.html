@@ -1,0 +1,677 @@
+{% extends 'shared/base.html' %}
+{% load static %}
+
+{% block title %}الشكاوى المُسندة - نائبك.كوم{% endblock %}
+
+{% block extra_css %}
+<style>
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+    
+    .response-form {
+        background: #f8f9fa;
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-top: 1rem;
+    }
+    
+    .complaint-timeline {
+        position: relative;
+        padding-left: 2rem;
+    }
+    
+    .timeline-item {
+        position: relative;
+        padding-bottom: 1rem;
+        border-left: 2px solid #dee2e6;
+        padding-left: 1rem;
+        margin-left: 0.5rem;
+    }
+    
+    .timeline-item::before {
+        content: '';
+        position: absolute;
+        left: -6px;
+        top: 0;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: var(--primary-green);
+    }
+    
+    .timeline-item:last-child {
+        border-left: none;
+    }
+    
+    .deadline-warning {
+        background: #fff3cd;
+        border: 1px solid #ffeaa7;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .overdue-warning {
+        background: #f8d7da;
+        border: 1px solid #f5c6cb;
+        border-radius: 8px;
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h1 class="mb-4">
+            <i class="fas fa-tasks text-primary-green me-2"></i>
+            الشكاوى المُسندة إليّ
+        </h1>
+    </div>
+</div>
+
+<!-- إحصائيات سريعة -->
+<div class="row mb-4">
+    <div class="col-md-2">
+        <div class="stat-card total">
+            <span class="stat-number">{{ stats.total_complaints }}</span>
+            <span class="stat-label">إجمالي الشكاوى</span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="stat-card pending" style="background: #17A2B8;">
+            <span class="stat-number">{{ stats.assigned_complaints }}</span>
+            <span class="stat-label">مُسندة</span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="stat-card pending" style="background: #28A745;">
+            <span class="stat-number">{{ stats.accepted_complaints }}</span>
+            <span class="stat-label">مقبولة</span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="stat-card resolved">
+            <span class="stat-number">{{ stats.resolved_complaints }}</span>
+            <span class="stat-label">محلولة</span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="stat-card rejected">
+            <span class="stat-number">{{ stats.rejected_complaints }}</span>
+            <span class="stat-label">مرفوضة</span>
+        </div>
+    </div>
+    <div class="col-md-2">
+        <div class="stat-card pending" style="background: #FD7E14;">
+            <span class="stat-number">{{ stats.overdue_complaints }}</span>
+            <span class="stat-label">متأخرة</span>
+        </div>
+    </div>
+</div>
+
+<!-- فلاتر وبحث -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <select class="form-select" id="status-filter">
+                            <option value="">جميع الحالات</option>
+                            <option value="assigned">مُسندة</option>
+                            <option value="accepted">مقبولة</option>
+                            <option value="rejected">مرفوضة</option>
+                            <option value="on_hold">معلقة</option>
+                            <option value="resolved">محلولة</option>
+                            <option value="overdue">متأخرة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select" id="priority-filter">
+                            <option value="">جميع الأولويات</option>
+                            <option value="urgent">عاجلة</option>
+                            <option value="high">عالية</option>
+                            <option value="medium">متوسطة</option>
+                            <option value="low">منخفضة</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" class="form-control" id="search-input" placeholder="البحث في الشكاوى...">
+                    </div>
+                    <div class="col-md-2">
+                        <button class="btn btn-primary w-100" id="refresh-complaints">
+                            <i class="fas fa-sync-alt me-1"></i>
+                            تحديث
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- قائمة الشكاوى -->
+<div class="row">
+    <div class="col-12">
+        <div id="complaints-list">
+            <!-- سيتم تحميل الشكاوى هنا عبر JavaScript -->
+            <div class="text-center py-4">
+                <div class="loading-spinner"></div>
+                <p class="mt-2">جاري تحميل الشكاوى...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal لعرض تفاصيل الشكوى والرد عليها -->
+<div class="modal fade" id="complaint-modal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">تفاصيل الشكوى</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="complaint-details">
+                <!-- سيتم تحميل التفاصيل هنا -->
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal للرد على الشكوى -->
+<div class="modal fade" id="response-modal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">الرد على الشكوى</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="response-form">
+                    <input type="hidden" id="response-complaint-id">
+                    
+                    <div class="mb-3">
+                        <label for="response-text" class="form-label">نص الرد *</label>
+                        <textarea class="form-control" id="response-text" rows="5" required maxlength="2000" placeholder="اكتب ردك على الشكوى..."></textarea>
+                        <div class="form-text">
+                            <span id="response-char-count">0</span> / 2000 حرف
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="resolution-text" class="form-label">الحل المقترح (اختياري)</label>
+                        <textarea class="form-control" id="resolution-text" rows="4" maxlength="2000" placeholder="اكتب الحل المقترح أو المتخذ..."></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="mark-resolved">
+                            <label class="form-check-label" for="mark-resolved">
+                                تم حل الشكوى نهائياً
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <div id="resolution-options" style="display: none;">
+                        <div class="mb-3">
+                            <label for="thank-you-message" class="form-label">رسالة شكر للإنجاز (ستظهر في صفحتك)</label>
+                            <textarea class="form-control" id="thank-you-message" rows="2" maxlength="500" placeholder="مثال: تم حل مشكلة الصرف الصحي في شارع النيل بالتعاون مع المحافظة"></textarea>
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">إلغاء</button>
+                <button type="button" class="btn btn-primary" id="submit-response">
+                    <i class="fas fa-paper-plane me-1"></i>
+                    إرسال الرد
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let currentComplaintId = null;
+    
+    // تحديث عداد الأحرف
+    $('#response-text').on('input', function() {
+        const count = $(this).val().length;
+        $('#response-char-count').text(count);
+        
+        if (count > 1800) {
+            $('#response-char-count').addClass('text-danger');
+        } else {
+            $('#response-char-count').removeClass('text-danger');
+        }
+    });
+    
+    // إظهار/إخفاء خيارات الحل
+    $('#mark-resolved').on('change', function() {
+        if ($(this).is(':checked')) {
+            $('#resolution-options').show();
+        } else {
+            $('#resolution-options').hide();
+        }
+    });
+    
+    // تحميل الشكاوى
+    function loadComplaints() {
+        const status = $('#status-filter').val();
+        const priority = $('#priority-filter').val();
+        const search = $('#search-input').val();
+        
+        let url = '/api/v1/complaints/';
+        const params = [];
+        
+        if (status) params.push(`status=${status}`);
+        if (priority) params.push(`priority=${priority}`);
+        if (search) params.push(`search=${encodeURIComponent(search)}`);
+        
+        if (params.length > 0) {
+            url += '?' + params.join('&');
+        }
+        
+        $.ajax({
+            url: url,
+            type: 'GET',
+            success: function(response) {
+                displayComplaints(response.results || response);
+            },
+            error: function() {
+                $('#complaints-list').html(`
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-triangle fa-3x text-muted mb-3"></i>
+                        <p>حدث خطأ في تحميل الشكاوى</p>
+                        <button class="btn btn-primary" onclick="loadComplaints()">إعادة المحاولة</button>
+                    </div>
+                `);
+            }
+        });
+    }
+    
+    function displayComplaints(complaints) {
+        if (complaints.length === 0) {
+            $('#complaints-list').html(`
+                <div class="text-center py-4">
+                    <i class="fas fa-inbox fa-3x text-muted mb-3"></i>
+                    <p>لا توجد شكاوى مُسندة إليك</p>
+                </div>
+            `);
+            return;
+        }
+        
+        let html = '';
+        complaints.forEach(complaint => {
+            const isOverdue = complaint.is_overdue;
+            const daysLeft = calculateDaysLeft(complaint.assigned_at);
+            
+            html += `
+                <div class="card mb-3 complaint-card priority-${complaint.priority} ${isOverdue ? 'border-danger' : ''}">
+                    ${isOverdue ? `
+                        <div class="overdue-warning">
+                            <i class="fas fa-exclamation-triangle text-danger me-2"></i>
+                            <strong>تحذير:</strong> هذه الشكوى متأخرة! يجب الرد عليها فوراً.
+                        </div>
+                    ` : (daysLeft <= 1 && complaint.status === 'on_hold' ? `
+                        <div class="deadline-warning">
+                            <i class="fas fa-clock text-warning me-2"></i>
+                            <strong>تنبيه:</strong> باقي ${daysLeft} يوم على انتهاء مهلة الدراسة.
+                        </div>
+                    ` : '')}
+                    
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-8">
+                                <h6 class="card-title">
+                                    ${complaint.title}
+                                    ${complaint.priority === 'urgent' ? '<i class="fas fa-exclamation-circle text-danger ms-2"></i>' : ''}
+                                </h6>
+                                <p class="card-text text-truncate">${complaint.content}</p>
+                                
+                                <div class="complaint-meta mb-2">
+                                    <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                                    <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                                    <small class="text-muted ms-2">
+                                        <i class="fas fa-user me-1"></i>
+                                        ${complaint.citizen_name}
+                                    </small>
+                                    <small class="text-muted ms-2">
+                                        <i class="fas fa-calendar me-1"></i>
+                                        ${new Date(complaint.created_at).toLocaleDateString('ar-EG')}
+                                    </small>
+                                    ${complaint.attachments_count > 0 ? `
+                                        <small class="text-muted ms-2">
+                                            <i class="fas fa-paperclip me-1"></i>
+                                            ${complaint.attachments_count} مرفق
+                                        </small>
+                                    ` : ''}
+                                </div>
+                                
+                                <small class="text-muted">
+                                    رقم المرجع: ${complaint.reference_number}
+                                </small>
+                            </div>
+                            
+                            <div class="col-md-4 text-end">
+                                <div class="action-buttons mb-2">
+                                    <button class="btn btn-sm btn-outline-primary" onclick="viewComplaint(${complaint.id})">
+                                        <i class="fas fa-eye me-1"></i>
+                                        عرض
+                                    </button>
+                                    
+                                    ${complaint.status === 'assigned' ? `
+                                        <button class="btn btn-sm btn-success" onclick="acceptComplaint(${complaint.id})">
+                                            <i class="fas fa-check me-1"></i>
+                                            قبول
+                                        </button>
+                                        <button class="btn btn-sm btn-warning" onclick="holdComplaint(${complaint.id})">
+                                            <i class="fas fa-pause me-1"></i>
+                                            تعليق
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="rejectComplaint(${complaint.id})">
+                                            <i class="fas fa-times me-1"></i>
+                                            رفض
+                                        </button>
+                                    ` : ''}
+                                    
+                                    ${['accepted', 'on_hold'].includes(complaint.status) ? `
+                                        <button class="btn btn-sm btn-primary" onclick="respondToComplaint(${complaint.id})">
+                                            <i class="fas fa-reply me-1"></i>
+                                            رد
+                                        </button>
+                                    ` : ''}
+                                </div>
+                                
+                                ${complaint.assigned_at ? `
+                                    <small class="text-muted d-block">
+                                        أُسندت: ${new Date(complaint.assigned_at).toLocaleDateString('ar-EG')}
+                                    </small>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        });
+        
+        $('#complaints-list').html(html);
+    }
+    
+    // عرض تفاصيل الشكوى
+    window.viewComplaint = function(id) {
+        $.ajax({
+            url: `/api/v1/complaints/${id}/`,
+            type: 'GET',
+            success: function(complaint) {
+                let html = `
+                    <div class="row">
+                        <div class="col-md-8">
+                            <div class="row mb-3">
+                                <div class="col-md-6">
+                                    <h6>العنوان</h6>
+                                    <p>${complaint.title}</p>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6>الحالة</h6>
+                                    <span class="badge status-${complaint.status}">${complaint.status_display}</span>
+                                </div>
+                                <div class="col-md-3">
+                                    <h6>الأولوية</h6>
+                                    <span class="badge priority-${complaint.priority}">${complaint.priority_display}</span>
+                                </div>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <h6>بيانات المواطن</h6>
+                                <p><strong>الاسم:</strong> ${complaint.citizen_name}</p>
+                                <p><strong>البريد الإلكتروني:</strong> ${complaint.citizen_email}</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <h6>محتوى الشكوى</h6>
+                                <p>${complaint.content}</p>
+                            </div>
+                            
+                            ${complaint.youtube_link ? `
+                                <div class="mb-3">
+                                    <h6>رابط يوتيوب</h6>
+                                    <iframe width="100%" height="300" src="https://www.youtube.com/embed/${extractYouTubeId(complaint.youtube_link)}" frameborder="0" allowfullscreen></iframe>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.attachments && complaint.attachments.length > 0 ? `
+                                <div class="mb-3">
+                                    <h6>المرفقات</h6>
+                                    <div class="row">
+                                        ${complaint.attachments.map(att => `
+                                            <div class="col-md-4 mb-2">
+                                                <a href="${att.file}" target="_blank" class="btn btn-outline-primary btn-sm w-100">
+                                                    <i class="fas fa-download me-1"></i>
+                                                    ${att.original_name}
+                                                </a>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.admin_response ? `
+                                <div class="mb-3">
+                                    <h6>رد الإدارة</h6>
+                                    <div class="alert alert-info">${complaint.admin_response}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.representative_response ? `
+                                <div class="mb-3">
+                                    <h6>ردي على الشكوى</h6>
+                                    <div class="alert alert-success">${complaint.representative_response}</div>
+                                </div>
+                            ` : ''}
+                            
+                            ${complaint.resolution ? `
+                                <div class="mb-3">
+                                    <h6>الحل المقدم</h6>
+                                    <div class="alert alert-primary">${complaint.resolution}</div>
+                                </div>
+                            ` : ''}
+                        </div>
+                        
+                        <div class="col-md-4">
+                            <h6>تاريخ الشكوى</h6>
+                            <div class="complaint-timeline">
+                                ${complaint.history && complaint.history.length > 0 ? 
+                                    complaint.history.map(item => `
+                                        <div class="timeline-item">
+                                            <small class="text-muted">${new Date(item.performed_at).toLocaleString('ar-EG')}</small>
+                                            <p class="mb-1"><strong>${item.action_display}</strong></p>
+                                            <p class="small text-muted">${item.description}</p>
+                                        </div>
+                                    `).join('') : 
+                                    '<p class="text-muted">لا يوجد تاريخ متاح</p>'
+                                }
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                $('#complaint-details').html(html);
+                $('#complaint-modal').modal('show');
+            }
+        });
+    };
+    
+    // قبول الشكوى
+    window.acceptComplaint = function(id) {
+        if (confirm('هل أنت متأكد من قبول هذه الشكوى؟')) {
+            $.ajax({
+                url: `/api/v1/complaints/${id}/accept/`,
+                type: 'POST',
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function() {
+                    alert('تم قبول الشكوى بنجاح!');
+                    loadComplaints();
+                },
+                error: function(xhr) {
+                    alert('حدث خطأ: ' + (xhr.responseJSON?.error || 'خطأ غير معروف'));
+                }
+            });
+        }
+    };
+    
+    // رفض الشكوى
+    window.rejectComplaint = function(id) {
+        const reason = prompt('يرجى كتابة سبب الرفض:');
+        if (reason && reason.trim()) {
+            $.ajax({
+                url: `/api/v1/complaints/${id}/reject/`,
+                type: 'POST',
+                data: { reason: reason },
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function() {
+                    alert('تم رفض الشكوى!');
+                    loadComplaints();
+                },
+                error: function(xhr) {
+                    alert('حدث خطأ: ' + (xhr.responseJSON?.error || 'خطأ غير معروف'));
+                }
+            });
+        }
+    };
+    
+    // تعليق الشكوى
+    window.holdComplaint = function(id) {
+        const reason = prompt('يرجى كتابة سبب التعليق (سيتم تعليقها لمدة 3 أيام):');
+        if (reason && reason.trim()) {
+            $.ajax({
+                url: `/api/v1/complaints/${id}/hold/`,
+                type: 'POST',
+                data: { reason: reason },
+                headers: {
+                    'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+                },
+                success: function() {
+                    alert('تم تعليق الشكوى لمدة 3 أيام!');
+                    loadComplaints();
+                },
+                error: function(xhr) {
+                    alert('حدث خطأ: ' + (xhr.responseJSON?.error || 'خطأ غير معروف'));
+                }
+            });
+        }
+    };
+    
+    // الرد على الشكوى
+    window.respondToComplaint = function(id) {
+        currentComplaintId = id;
+        $('#response-complaint-id').val(id);
+        $('#response-form')[0].reset();
+        $('#resolution-options').hide();
+        $('#response-modal').modal('show');
+    };
+    
+    // إرسال الرد
+    $('#submit-response').on('click', function() {
+        const responseText = $('#response-text').val().trim();
+        const resolutionText = $('#resolution-text').val().trim();
+        const isResolved = $('#mark-resolved').is(':checked');
+        const thankYouMessage = $('#thank-you-message').val().trim();
+        
+        if (!responseText) {
+            alert('يرجى كتابة نص الرد');
+            return;
+        }
+        
+        const data = {
+            response_type: 'representative',
+            response_text: responseText
+        };
+        
+        if (isResolved && resolutionText) {
+            data.resolution = resolutionText;
+            data.award_points = true;
+            if (thankYouMessage) {
+                data.thank_you_message = thankYouMessage;
+            }
+        }
+        
+        $.ajax({
+            url: `/api/v1/complaints/${currentComplaintId}/respond/`,
+            type: 'POST',
+            data: data,
+            headers: {
+                'X-CSRFToken': $('[name=csrfmiddlewaretoken]').val()
+            },
+            success: function() {
+                alert('تم إرسال الرد بنجاح!');
+                $('#response-modal').modal('hide');
+                loadComplaints();
+            },
+            error: function(xhr) {
+                const errors = xhr.responseJSON;
+                let errorMessage = 'حدث خطأ في إرسال الرد:\n';
+                
+                if (typeof errors === 'object') {
+                    for (const field in errors) {
+                        errorMessage += `${field}: ${errors[field].join(', ')}\n`;
+                    }
+                } else {
+                    errorMessage += errors?.error || 'خطأ غير معروف';
+                }
+                
+                alert(errorMessage);
+            }
+        });
+    });
+    
+    // تصفية الشكاوى
+    $('#status-filter, #priority-filter').on('change', loadComplaints);
+    $('#search-input').on('input', debounce(loadComplaints, 500));
+    $('#refresh-complaints').on('click', loadComplaints);
+    
+    // تحميل الشكاوى عند تحميل الصفحة
+    loadComplaints();
+    
+    // وظائف مساعدة
+    function extractYouTubeId(url) {
+        const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|&v=)([^#&?]*).*/;
+        const match = url.match(regExp);
+        return (match && match[2].length === 11) ? match[2] : null;
+    }
+    
+    function calculateDaysLeft(assignedAt) {
+        const assigned = new Date(assignedAt);
+        const deadline = new Date(assigned.getTime() + (3 * 24 * 60 * 60 * 1000)); // 3 days
+        const now = new Date();
+        const diffTime = deadline - now;
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        return Math.max(0, diffDays);
+    }
+    
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+});
+</script>
+{% endblock %}
