@@ -16,6 +16,9 @@ router.register(r'history', views.ComplaintHistoryViewSet, basename='history')
 
 # URLs الأساسية
 urlpatterns = [
+    # الصفحة الرئيسية
+    path('', views.ServiceInfoView.as_view(), name='service_info'),
+    
     # API endpoints
     path('api/v1/', include(router.urls)),
     

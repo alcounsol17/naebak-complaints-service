@@ -340,6 +340,41 @@ class ComplaintHistoryViewSet(viewsets.ReadOnlyModelViewSet):
         return self.queryset
 
 
+class ServiceInfoView(APIView):
+    """عرض معلومات الخدمة"""
+    
+    permission_classes = []
+    
+    def get(self, request):
+        """عرض معلومات الخدمة"""
+        return Response({
+            'service': 'Naebak Complaints Service',
+            'description': 'خدمة إدارة الشكاوى لمنصة نائبك.كوم - منصة التواصل بين المواطنين والنواب',
+            'version': '1.0.0',
+            'status': 'active',
+            'timestamp': timezone.now(),
+            'endpoints': {
+                'complaints': '/api/v1/complaints/',
+                'categories': '/api/v1/categories/',
+                'attachments': '/api/v1/attachments/',
+                'templates': '/api/v1/templates/',
+                'history': '/api/v1/history/',
+                'health': '/health/',
+                'admin': '/admin/',
+            },
+            'features': [
+                'إرسال الشكاوى',
+                'إرفاق الملفات',
+                'تصنيف الشكاوى',
+                'متابعة الحالة',
+                'إدارة النواب',
+                'إحصائيات شاملة',
+                'تصدير البيانات',
+                'نظام الإشعارات'
+            ]
+        })
+
+
 class HealthCheckView(APIView):
     """فحص صحة الخدمة"""
     
